@@ -66,10 +66,8 @@ def parse_html_table(table):
     titles = get_table_header(table)
     rows = get_table_rows(table)
     for row in rows:
-      data = {}
-      for index, title in enumerate(titles):
-        data[title] = row[index]
-      table_history.append(data)
+        data = {title: row[index] for index, title in enumerate(titles)}
+        table_history.append(data)
 
     return table_history
 
@@ -102,21 +100,21 @@ def get_payout_months_for_a_year(history_date_list):
     pay_type, pay_frequency = get_stock_payout_rate(history_date_list)
     print(f"\npay_type received: {pay_type} and frequency: {pay_frequency}")
     for date in history_date_list:
-      month = get_month_from_date(date['Pay. Date'])
-      print(f"\ncurrent month: {month} and current date: {date}")
-      print(f"current payout_months: {payout_months}")
-      isPayTypeCorrect = date['Type'] == pay_type
-      print(f"value of isPayTypeCorrect: {isPayTypeCorrect}")
-      if not isPayTypeCorrect or int(month) in payout_months:
-        print(f"inside if continueing")
-        continue
-      elif isPayTypeCorrect and len(payout_months) == pay_frequency:
-        print(f"inside else breaking")
-        break
+        month = get_month_from_date(date['Pay. Date'])
+        print(f"\ncurrent month: {month} and current date: {date}")
+        print(f"current payout_months: {payout_months}")
+        isPayTypeCorrect = date['Type'] == pay_type
+        print(f"value of isPayTypeCorrect: {isPayTypeCorrect}")
+        if not isPayTypeCorrect or int(month) in payout_months:
+            print("inside if continueing")
+            continue
+        elif len(payout_months) == pay_frequency:
+            print("inside else breaking")
+            break
 
-      if isPayTypeCorrect:
-        print(f"adding month to payout_months")
-        payout_months.append(int(month))
+        if isPayTypeCorrect:
+            print("adding month to payout_months")
+            payout_months.append(int(month))
 
     return sorted(payout_months)
 
@@ -127,55 +125,55 @@ def write_row_to_csv_file(filename, mode, row_data):
 
 def isPageUpToDate(dividend_data):
     for row_date in dividend_data:
-      now = datetime.datetime.now()
-      if str(now.year) in row_date['Ex-Div. Date'] or str(now.year - 1) in row_date['Ex-Div. Date']:
-        return True
-      else:
-        return False
+        now = datetime.datetime.now()
+        return (
+            str(now.year) in row_date['Ex-Div. Date']
+            or str(now.year - 1) in row_date['Ex-Div. Date']
+        )
 
 write_row_to_csv_file(filename='stock-pay-dates.csv', mode='w', row_data=header)
 
 with open("my-stocks.txt", "r") as file:
-  for stock in file:
-    stock_name = stock.strip()
-    print(stock_name)
-    proxy_list = get_proxies()
-    proxies = cycle(proxy_list)
-    proxy_pool = list(islice(proxies, len(proxy_list)))
-    print(f"Number of proxies to try {len(proxy_list)}")
+    for stock in file:
+        stock_name = stock.strip()
+        print(stock_name)
+        proxy_list = get_proxies()
+        proxies = cycle(proxy_list)
+        proxy_pool = list(islice(proxies, len(proxy_list)))
+        print(f"Number of proxies to try {len(proxy_list)}")
 
-    url = f"https://www.streetinsider.com/dividend_history.php?q={stock_name}"
+        url = f"https://www.streetinsider.com/dividend_history.php?q={stock_name}"
 
-    tag = 'table'
-    search_filter = {'class': 'dividends'}
-    content = get_page_content(url, proxy_pool, tag, search_filter)
+        tag = 'table'
+        search_filter = {'class': 'dividends'}
+        content = get_page_content(url, proxy_pool, tag, search_filter)
 
-    current_stock = defaultdict(list)
-    if content:
+        current_stock = defaultdict(list)
+        if content:
 
-      soup = BeautifulSoup(content, "html.parser")
-      dividend_table = soup.find(tag, **search_filter)
-      dividend_dates = parse_html_table(dividend_table)
-      pay_dates = get_payout_months_for_a_year(dividend_dates)
-      current_stock = {"name": stock_name,
-                       "pay-dates": pay_dates}
+            soup = BeautifulSoup(content, "html.parser")
+            dividend_table = soup.find(tag, **search_filter)
+            dividend_dates = parse_html_table(dividend_table)
+            pay_dates = get_payout_months_for_a_year(dividend_dates)
+            current_stock = {"name": stock_name,
+                             "pay-dates": pay_dates}
 
-      print(current_stock)
-      row_data = []
-      for index, column in enumerate(header):
-        dates = current_stock["pay-dates"]
-        if index == 0 and isPageUpToDate(dividend_dates):
-          row_data.append(current_stock["name"])
-        elif index == 0 and not isPageUpToDate(dividend_dates):
-          row_data.append(f"{current_stock['name']} Outdated")
-        elif index in dates:
-          row_data.append(current_stock["name"])
+            print(current_stock)
+            row_data = []
+            for index, column in enumerate(header):
+              dates = current_stock["pay-dates"]
+              if index == 0 and isPageUpToDate(dividend_dates):
+                row_data.append(current_stock["name"])
+              elif index == 0 and not isPageUpToDate(dividend_dates):
+                row_data.append(f"{current_stock['name']} Outdated")
+              elif index in dates:
+                row_data.append(current_stock["name"])
+              else:
+                row_data.append("")
+
         else:
-          row_data.append("")
+            print("Unable to find stock information...writing to csv file as unknown!")
+            row_data = [f"{stock_name} (Check)" if index == 0 else '???' for index, column in enumerate(header)]
 
-      write_row_to_csv_file(filename='stock-pay-dates.csv', mode='a', row_data=row_data)
-    else:
-      print("Unable to find stock information...writing to csv file as unknown!")
-      row_data = [f"{stock_name} (Check)" if index == 0 else '???' for index, column in enumerate(header)]
-      write_row_to_csv_file(filename='stock-pay-dates.csv', mode='a', row_data=row_data)
+        write_row_to_csv_file(filename='stock-pay-dates.csv', mode='a', row_data=row_data)
 
